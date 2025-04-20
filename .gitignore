@@ -1,0 +1,9 @@
+#devel stuff
+.ansible
+.vscode
+.trunk
+README_backup_*
+.docsible*
+
+#os stuff
+.DS_Store

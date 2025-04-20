@@ -1,0 +1,40 @@
+---
+- name: Configure access and permissions and additional disks
+  hosts: all
+  become: true
+  become_method: ansible.builtin.sudo
+  gather_facts: true
+  any_errors_fatal: true
+
+  vars:
+    ansible_ssh_user: test_user
+    admin_password: test_password
+    ssh_key: test_ssh_key
+    additional_disk:
+      - device: /dev/sdb
+        number: 1
+        fs_type: ext4
+        mount_point: /mnt/data
+        mount: true
+        size: 10G
+
+  tasks:
+    - name: Include vars dir
+      ansible.builtin.include_vars:
+        dir: vars
+        ignore_unknown_extensions: true
+
+    - name: Configure access and permissions
+      ansible.builtin.include_role:
+        name: debian_common_tasks
+        tasks_from: access_permissions
+
+    - name: Partition additional disk
+      ansible.builtin.include_role:
+        name: debian_common_tasks
+        tasks_from: additional_disk
+
+    - name: Check if reboot is needed and reboot
+      ansible.builtin.include_role:
+        name: debian_common_tasks
+        tasks_from: check_reboot

@@ -1,0 +1,192 @@
+---
+- name: additional_disk | Partition and mount additional disks
+  when: additional_disk is defined
+  block:
+    - name: additional_disk | Set usb_max_current_enable if disk is usb connected to Raspberry Pi
+      when: debian_common_tasks_raspberry_usb_power
+      block:
+        - name: additional_disk | Set usb_max_current_enable if disk is usb connected to Raspberry Pi
+          ansible.builtin.lineinfile:
+            path: "{{ debian_common_tasks_config_txt }}"
+            regexp: "{{ l_configtxt.regexp }}"
+            line: "{{ l_configtxt.line }}"
+          loop_control:
+            loop_var: l_configtxt
+          loop:
+            - {
+                regexp: "usb_max_current_enable=",
+                line: "usb_max_current_enable=1",
+              }
+          notify: Reboot
+
+        - name: additional_disk | Flush handlers
+          ansible.builtin.meta: flush_handlers
+
+    - name: additional_disk | Install packages
+      ansible.builtin.apt:
+        name:
+          - parted
+          - rsync
+          - "{{ 'xfsprogs' if 'xfs' in additional_disk | json_query('[].fs_type') else omit }}"
+        state: present
+        update_cache: true
+
+    - name: additional_disk | Get real devices path
+      ansible.builtin.stat:
+        path: "{{ l_path.device }}"
+      loop: "{{ additional_disk }}"
+      loop_control:
+        loop_var: l_path
+      register: real_device_path
+
+    - name: additional_disk | Set real devices path
+      ansible.builtin.set_fact:
+        additional_disk: "{{ additional_disk | map('combine', real_device_path.results | json_query(real_device_path_query)) }}"
+      vars:
+        real_device_path_query: "[].stat.{device: lnk_source || path}"
+
+    - name: additional_disk | Create partitions
+      community.general.parted:
+        device: "{{ l_partition.device }}"
+        number: "{{ l_partition.number }}"
+        state: present
+        fs_type: "{{ l_partition.fs_type | default(omit) }}"
+        part_start: "{{ '0%' if l_partition.number == 1 else additional_disk[l_partition_idx - 1].size }}"
+        part_end: "{{ l_partition.size }}"
+        unit: "{{ '%' if '%' in l_partition.size else omit }}"
+        label: "{{ l_partition.label | default('gpt') }}"
+        part_type: "{{ l_partition.part_type | default('extended') }}"
+      loop: "{{ additional_disk }}"
+      loop_control:
+        loop_var: l_partition
+        index_var: l_partition_idx
+
+    - name: additional_disk | Create filesystems
+      when: l_filesystem.fs_type is defined
+      community.general.filesystem:
+        fstype: "{{ l_filesystem.fs_type | default(omit) }}"
+        dev: "{{ l_filesystem.device ~ l_filesystem.number }}"
+        force: "{{ debian_common_tasks_force_filesystem | bool }}"
+      loop: "{{ additional_disk }}"
+      loop_control:
+        loop_var: l_filesystem
+
+    - name: additional_disk | Regather devices facts
+      ansible.builtin.setup:
+        gather_subset:
+          - devices
+
+    - name: additional_disk | Add partition name and uuids to partitions
+      ansible.builtin.set_fact:
+        additional_disk_extended: "{{ additional_disk_extended | default([]) + [l_partition | combine({'uuid': uuid, 'partition': partition})] }}"
+      loop: "{{ additional_disk }}"
+      loop_control:
+        loop_var: l_partition
+      vars:
+        partition: "{{ l_partition.device | basename ~ l_partition.number if l_partition.number is defined else '' }}"
+        uuid: "{{ ansible_devices | json_query(uuid_query) }}"
+        uuid_query: "{{ '([*.partitions.' ~ partition ~ '.links.uuids || ' ~ partition ~ '.links.uuids])[][] | [0]' }}"
+
+    - name: additional_disk | Mount partitions
+      when:
+        - l_mount.mount | default(false) | bool
+      ansible.posix.mount:
+        path: "{{ l_mount.mount_point }}"
+        src: "UUID={{ l_mount.uuid }}"
+        fstype: "{{ l_mount.fs_type }}"
+        state: present
+        boot: true
+      loop: "{{ additional_disk_extended }}"
+      loop_control:
+        loop_var: l_mount
+      register: mounts_changed
+
+    - name: additional_disk | Set not existing mounts
+      when: mounts_changed is defined
+      ansible.builtin.set_fact:
+        not_existing_mounts: "{{ mounts_changed.results | json_query('[?changed].l_mount.mount_point') }}"
+
+    - name: additional_disk | Check if needed to move folders on additional disk
+      when: not_existing_mounts | length > 0
+      block:
+        - name: additional_disk | Check mount points
+          ansible.builtin.stat:
+            path: "{{ l_mount_path }}"
+          register: existing_paths
+          loop: "{{ not_existing_mounts }}"
+          loop_control:
+            loop_var: l_mount_path
+
+        - name: additional_disk | Set folders to sync and to create
+          ansible.builtin.set_fact:
+            folders_to_sync: "{{ existing_paths.results | json_query('[?stat.exists].l_mount_path') }}"
+            folders_to_create: "{{ existing_paths.results | json_query('[?stat.exists==`false`].l_mount_path') }}"
+
+        - name: additional_disk | Sync existing paths
+          when: folders_to_sync | length > 0
+          block:
+            - name: additional_disk | Create temp Path
+              ansible.builtin.file:
+                path: "{{ debian_common_tasks_partition_temp_mount }}{{ l_temp_mount_dir }}"
+                state: directory
+                mode: "0755"
+              notify: Reboot
+              loop: "{{ folders_to_sync }}"
+              loop_control:
+                loop_var: l_temp_mount_dir
+
+            - name: additional_disk | Mount volume to temp path
+              ansible.posix.mount:
+                path: "{{ debian_common_tasks_partition_temp_mount }}{{ l_temp_mount }}"
+                src: "UUID={{ additional_disk_extended | json_query(mount_point_search ~ '.uuid | [0]') }}"
+                fstype: "{{ additional_disk_extended | json_query(mount_point_search ~ '.fs_type | [0]') }}"
+                state: ephemeral
+              notify: Reboot
+              loop: "{{ folders_to_sync }}"
+              loop_control:
+                loop_var: l_temp_mount
+              vars:
+                mount_point_search: "{{ '[?mount_point == `' ~ l_temp_mount ~ '`]' }}"
+
+            - name: additional_disk | Synchronize folders
+              ansible.posix.synchronize:
+                src: "{{ l_folder }}"
+                dest: "{{ debian_common_tasks_partition_temp_mount }}"
+              delegate_to: "{{ inventory_hostname }}"
+              notify: Reboot
+              loop: "{{ folders_to_sync }}"
+              loop_control:
+                loop_var: l_folder
+
+        - name: additional_disk | Create new paths
+          when: folders_to_create | length > 0
+          block:
+            - name: additional_disk | Create path
+              ansible.builtin.file:
+                path: "{{ l_path_create }}"
+                state: directory
+                mode: "0755"
+              loop: "{{ folders_to_create }}"
+              loop_control:
+                loop_var: l_path_create
+
+            - name: additional_disk | Mount volumes to paths
+              ansible.posix.mount:
+                path: "{{ l_path_mount }}"
+                src: "UUID={{ additional_disk_extended | json_query(mount_point_search ~ '.uuid | [0]') }}"
+                fstype: "{{ additional_disk_extended | json_query(mount_point_search ~ '.fs_type | [0]') }}"
+                state: mounted
+                boot: true
+              loop: "{{ folders_to_create }}"
+              loop_control:
+                loop_var: l_path_mount
+              vars:
+                mount_point_search: "{{ '[?mount_point == `' ~ l_path_mount ~ '`]' }}"
+
+            - name: additional_disk | Delete temp Path
+              ansible.builtin.file:
+                path: "{{ debian_common_tasks_partition_temp_mount }}{{ l_temp_mount_dir }}"
+                state: absent
+              loop: "{{ folders_to_sync }}"
+              loop_control:
+                loop_var: l_temp_mount_dir

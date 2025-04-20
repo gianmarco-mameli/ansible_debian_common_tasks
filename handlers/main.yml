@@ -1,0 +1,9 @@
+---
+- name: Systemd reload
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Reboot
+  ansible.builtin.reboot:
+    msg: "Reboot"
+    reboot_timeout: 300

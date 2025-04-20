@@ -1,0 +1,183 @@
+- name: common_raspberry | Change system locale
+  ansible.builtin.command: "raspi-config nonint do_change_locale {{ debian_common_tasks_locale }}"
+  changed_when: false
+
+- name: common_raspberry | Change timezone
+  ansible.builtin.command: "raspi-config nonint do_change_timezone {{ debian_common_tasks_timezone }}"
+  changed_when: false
+
+- name: common_raspberry | Set boot type
+  # when: debian_common_tasks_boot_to_cli | bool
+  ansible.builtin.command:
+    argv:
+      - raspi-config
+      - nonint
+      - do_boot_behaviour
+      - "B{{ cli_value + login_value }}"
+  changed_when: false
+  vars:
+    cli_value: "{{ debian_common_tasks_boot_to_cli | bool | ternary(1, 3) }}"
+    login_value: "{{ debian_common_tasks_boot_login | bool | ternary(1, 0) }}"
+  notify:
+    - Reboot
+
+- name: common_raspberry | Set boot network install ui
+  ansible.builtin.command:
+    argv:
+      - raspi-config
+      - nonint
+      - do_network_install_ui
+      - "B{{ netui_value }}"
+  changed_when: false
+  vars:
+    netui_value: "{{ debian_common_tasks_boot_net_install_ui_always | bool | ternary(1, 2) }}"
+  notify:
+    - Reboot
+
+- name: common_raspberry | Turn off hdmi with rc.local
+  ansible.builtin.lineinfile:
+    path: "/etc/rc.local"
+    line: "/opt/vc/bin/tvservice -o"
+    regexp: "/opt/vc/bin/tvservice"
+    insertbefore: "exit 0"
+    state: "{{ 'absent' if debian_common_tasks_systemd_hdmi_on else 'present' }}"
+  notify:
+    - Systemd reload
+
+# - name: common_raspberry | Disable swap file
+#   when: debian_common_tasks_bisable_swap | bool
+#   ansible.builtin.systemd:
+#     name: dphys-swapfile
+#     enabled: false
+#     state: stopped
+
+- name: common_raspberry | Set config.txt parameters
+  ansible.builtin.lineinfile:
+    path: "{{ debian_common_tasks_config_txt }}"
+    regexp: "{{ l_configtxt.regexp }}"
+    line: "{{ l_configtxt.line }}"
+    state: "{{ l_configtxt.state | default('present') }}"
+  loop_control:
+    loop_var: l_configtxt
+  loop: "{{ debian_common_tasks_config_txt_lines }}"
+  notify: Reboot
+
+#     # - name: configure driver options
+#     #   file:
+#     #     # src: bcm2835_v4l2.conf.j2
+#     #     path: "/etc/modprobe.d/bcm2835_v4l2.conf"
+#     #     state: absent
+
+#     # - name: enable bcm2835-v4l2
+#     #   modprobe:
+#     #     name: bcm2835-v4l2
+#     #     state: present
+
+#     # - name: apply rotation to camera
+#     #   lineinfile:
+#     #     path: "/etc/rc.local"
+#     #     line: "v4l2-ctl --set-ctrl=rotate={{ camera_rotation }}"
+#     #     regexp: "v4l2-ctl --set-ctrl=rotate="
+#     #     insertbefore: "exit 0"
+#     #     state: present
+#     #   notify:
+#     #     - systemd reload
+
+# - name: Get SPI status
+#   ansible.builtin.command: "raspi-config nonint get_spi"
+#   register: spi_status
+#   changed_when: false
+
+# - name: Enable SPI
+#   ansible.builtin.command: "raspi-config nonint do_spi 0"
+#   when: (spi_status.stdout != '0')
+
+# - name: Get I2C status
+#   ansible.builtin.command: "raspi-config nonint get_i2c"
+#   register: i2c_status
+#   changed_when: false
+
+# - name: Enable I2C
+#   ansible.builtin.command: "raspi-config nonint do_i2c 0"
+#   when: (i2c_status.stdout != '0')
+
+# - name: Copy Blinkatest Script
+#   ansible.builtin.copy:
+#     src: blinkatest.py
+#     dest: "{{ scripts_dir }}/blinkatest.py"
+#     mode: '0755'
+
+- name: common_raspberry | Disable display backlight service
+  ansible.builtin.service:
+    name: rpi-display-backlight
+    enabled: "{{ 'false' if debian_common_tasks_display_state == 0 else 'true' }}"
+    state: "{{ 'stopped' if debian_common_tasks_display_state == 0 else 'started' }}"
+
+# - name: disable bluetooth sap plugin
+#   template:
+#     src: 'bluetooth_override.conf'
+#     dest: '/etc/systemd/system/bluetooth.service.d/override.conf'
+#   notify:
+#     - systemd reload
+#      --
+
+- name: common_raspberry | Enable composite out and set sdtv_mode
+  when: debian_common_tasks_enable_composite | bool
+  ansible.builtin.lineinfile:
+    path: "{{ config_txt }}"
+    regexp: "#sdtv_mode="
+    line: "sdtv_mode={{ debian_common_tasks_sdtv_map[debian_common_tasks_sdtv_mode] }}"
+
+- name: common_raspberry | Config cgroups
+  when: debian_common_tasks_cgroups_enable | bool
+  block:
+    - name: common_raspberry | Check if cmdline file exists
+      ansible.builtin.stat:
+        path: "{{ debian_common_tasks_cmdline_file }}"
+      register: cmdline_file
+
+    - name: common_raspberry | Disable ipv6 on cmdline
+      when: cmdline_file.stat.exists
+      block:
+        - name: common_raspberry | Get actual cmdline file
+          ansible.builtin.slurp:
+            src: "{{ debian_common_tasks_cmdline_file }}"
+          register: r_cmdline
+
+        - name: common_raspberry | Update cmdline file for cgroups
+          when: "'cgroup' not in old_cmdline"
+          ansible.builtin.lineinfile:
+            path: "{{ debian_common_tasks_cmdline_file }}"
+            regexp: "{{ old_cmdline }}"
+            line: "{{ new_cmdline }}"
+          vars:
+            cgroups_list: "{{ debian_common_tasks_cgroups_cmdlines | join(' ') }}"
+            old_cmdline: "{{ r_cmdline['content'] | b64decode | trim }}"
+            new_cmdline: "{{ old_cmdline ~ ' ' ~ cgroups_list }}"
+          notify: Reboot
+
+- name: common_raspberry | Configure rpi-connect service
+  when: debian_common_tasks_rpiconnect_enable | bool
+  block:
+    - name: common_raspberry | Install rpi-connect service
+      ansible.builtin.package:
+        name: rpi-connect
+        state: present
+        update_cache: true
+
+    - name: common_raspberry | Enable lingering
+      when: debian_common_tasks_rpiconnect_lingering | bool
+      become: false
+      ansible.builtin.command:
+        argv:
+          - loginctl
+          - enable-linger
+      changed_when: false
+
+    - name: common_raspberry | Enable rpi-connect service
+      become: false
+      ansible.builtin.command:
+        argv:
+          - rpi-connect
+          - "{{ 'on' if debian_common_tasks_rpiconnect_enable | bool else 'off' }}"
+      changed_when: false

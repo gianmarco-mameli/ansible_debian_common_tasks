@@ -1,0 +1,117 @@
+---
+- name: common | Disable architecture armhf on arm64
+  when:
+    - ansible_machine == "aarch64"
+    - debian_common_tasks_disable_armhf | bool
+  ansible.builtin.command: dpkg --remove-architecture armhf
+  changed_when: false
+
+- name: common | Configure aptcacher
+  when: debian_common_tasks_apt_cacher | bool
+  ansible.builtin.template:
+    src: "{{ debian_common_tasks_apt_cacher_config | basename }}.j2"
+    dest: "{{ debian_common_tasks_apt_cacher_config }}"
+    mode: "0644"
+
+- name: common | Install gpg and keyrings
+  ansible.builtin.apt:
+    name: "{{ debian_common_tasks_gpg_keyrings }}"
+    update_cache: true
+    state: present
+
+- name: common | Add custom apts key by id from a keyserver
+  when: debian_common_tasks_custom_keys is defined
+  ansible.builtin.apt_key:
+    keyserver: "{{ l_custom_key.keyserver }}"
+    id: "{{ l_custom_key.id }}"
+  loop: "{{ debian_common_tasks_custom_keys }}"
+  loop_control:
+    loop_var: l_custom_key
+
+- name: common | Install custom ca certificate
+  when: debian_common_tasks_custom_ca | bool
+  block:
+    - name: common | Install ca certificate
+      ansible.builtin.copy:
+        dest: "{{ debian_common_tasks_ca_certs_path }}/myca.crt"
+        content: "{{ debian_common_tasks_custom_ca_secret }}"
+        owner: root
+        group: root
+        mode: "644"
+
+    - name: common | Update ca certificates
+      ansible.builtin.command: /usr/sbin/update-ca-certificates
+      changed_when: false
+
+- name: common | Add custom package repositories
+  ansible.builtin.deb822_repository:
+    name: "{{ l_repo.uris | urlsplit('hostname') }}"
+    types: deb
+    uris: "{{ l_repo.uris }}"
+    suites: "{{ l_repo.suites }}"
+    components: "{{ l_repo.components }}"
+    architectures: "{{ l_repo.architectures | default(omit) }}"
+    signed_by: "{{ l_repo.signed_by | default(omit) }}"
+  loop_control:
+    loop_var: l_repo
+  loop: "{{ debian_common_tasks_custom_repos }}"
+
+- name: common | Apt-get upgrade
+  when: debian_common_tasks_apt_upgrade | bool
+  ansible.builtin.apt:
+    upgrade: "{{ debian_common_tasks_apt_upgrade_type }}"
+    force_apt_get: true
+    update_cache: true
+
+- name: common | Install common packages
+  ansible.builtin.apt:
+    name: "{{ debian_common_tasks_common_packages }}"
+    state: present
+
+- name: common | Install pipx packages
+  when: debian_common_tasks_pipx_packages is defined and debian_common_tasks_pipx_packages | length > 0
+  become_user: "{{ ansible_ssh_user }}"
+  become: true
+  community.general.pipx:
+    name: "{{ l_pipx }}"
+    state: install
+    install_deps: true
+  loop: "{{ debian_common_tasks_pipx_packages }}"
+  loop_control:
+    loop_var: l_pipx
+
+- name: Remove packages from variable remove_packages
+  when: debian_common_tasks_remove_packages is defined and
+    debian_common_tasks_remove_packages | length > 0
+  ansible.builtin.apt:
+    name: "{{ debian_common_tasks_remove_packages }}"
+    state: absent
+    purge: true
+    autoclean: true
+    autoremove: true
+
+- name: common | Create custom scripts directory
+  when: debian_common_tasks_scripts_dir is defined
+  ansible.builtin.file:
+    path: "{{ debian_common_tasks_scripts_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: common | Configure sshd
+  ansible.builtin.lineinfile:
+    path: "{{ debian_common_tasks_sshd_config }}"
+    regexp: UseDNS
+    line: UseDNS no
+
+- name: common | Configure systemd config file
+  when: debian_common_tasks_systemd_conf is defined and
+    debian_common_tasks_systemd_conf_lines is defined and
+    debian_common_tasks_systemd_conf_lines | length > 0
+  ansible.builtin.lineinfile:
+    path: "{{ debian_common_tasks_systemd_conf }}"
+    regexp: "{{ l_systemd.regexp }}"
+    line: "{{ l_systemd.line }}"
+    state: "{{ l_systemd.state | default('present') }}"
+  loop: "{{ debian_common_tasks_systemd_conf_lines }}"
+  loop_control:
+    loop_var: l_systemd
