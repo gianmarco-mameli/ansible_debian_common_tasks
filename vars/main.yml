@@ -1,0 +1,21 @@
+---
+# vars file for debian_common_tasks
+
+# description: CA certificates path
+debian_common_tasks_ca_certs_path: /usr/local/share/ca-certificates
+
+# description: systemd conf file path
+debian_common_tasks_systemd_conf: /etc/systemd/system.conf
+
+# description: sshd config file path
+debian_common_tasks_sshd_config: /etc/ssh/sshd_config
+
+# description: sdtv settings map
+debian_common_tasks_sdtv_map: # https://elinux.org/RPi_Configuration
+  ntsc: 0 # Normal NTSC
+  japan_ntsc: 1 # Japanese version of NTSC – no pedestal
+  pal: 2 # Normal PAL
+  braz_pal: 3 # Brazilian version of PAL – 525/60 rather than 625/50, different subcarrier
+
+# description: Cmdline file path
+debian_common_tasks_cmdline_file: /boot/firmware/cmdline.txt

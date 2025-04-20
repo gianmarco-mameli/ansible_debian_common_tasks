@@ -1,0 +1,70 @@
+---
+- name: access_permissions | Assert variables
+  ansible.builtin.assert:
+    that:
+      - ansible_ssh_user is defined
+      - admin_password is defined if debian_common_tasks_set_password | bool
+      - ssh_key is defined if debian_common_tasks_set_ssh_key | bool
+
+- name: access_permissions | Configure sudo
+  when: debian_common_tasks_configure_sudo | bool
+  block:
+    - name: access_permissions | Install sudo
+      ansible.builtin.apt:
+        name: sudo
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: access_permissions | Add ansible user to sudoers
+      community.general.sudoers:
+        name: "{{ l_sudoers }}"
+        state: present
+        user: "{{ l_sudoers }}"
+        nopassword: true
+        commands: "{{ debian_common_tasks_sudo_commands }}"
+      loop: "{{ debian_common_tasks_sudoers }}"
+      loop_control:
+        loop_var: l_sudoers
+
+- name: access_permissions | Set ssh access via key
+  when: debian_common_tasks_set_ssh_key | bool
+  ansible.posix.authorized_key:
+    user: "{{ l_ssh_key }}"
+    key: "{{ ssh_key }}"
+    state: present
+  loop: "{{ debian_common_tasks_ssh_key_users }}"
+  loop_control:
+    loop_var: l_ssh_key
+
+- name: access_permissions | Change ssh user password
+  when: debian_common_tasks_set_password | bool
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      (echo '{{ admin_password }}' ; echo '{{ admin_password }}') | passwd {{ ansible_ssh_user }}
+    executable: /bin/bash
+  changed_when: false
+  no_log: true
+
+- name: access_permissions | Disable root login
+  when: debian_common_tasks_disable_root_login | bool
+  ansible.builtin.user:
+    name: root
+    password_lock: true
+
+- name: access_permissions | Remove users
+  ansible.builtin.user:
+    state: absent
+    name: "{{ l_user }}"
+  loop: "{{ debian_common_tasks_remove_users }}"
+  loop_control:
+    loop_var: l_user
+
+- name: access_permissions | Remove users leftovers
+  ansible.builtin.file:
+    state: absent
+    path: "{{ l_remove_path }}"
+  loop: "{{ debian_common_tasks_remove_users_paths | product(debian_common_tasks_remove_users) | map('join', '/') }}"
+  loop_control:
+    loop_var: l_remove_path

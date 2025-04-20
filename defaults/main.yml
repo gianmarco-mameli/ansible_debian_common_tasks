@@ -1,0 +1,330 @@
+---
+# defaults file for debian_common_tasks
+
+# required: true
+# title: Ansible SSH user
+# description: Ansible SSH user to use and configure
+ansible_ssh_user: "{{ ansible_user }}"
+
+# required: false
+# title: Ansible SSH user password
+# description: Ansible SSH user password to use and configure, required if true `debian_common_tasks_set_password`
+admin_password: "{{ ansible_password }}"
+
+# required: false
+# title: Ansible SSH user ssh key
+# description: Ansible SSH user ssh key to use and configure, required if true `debian_common_tasks_set_ssh_key`
+ssh_key: ""
+
+# required: false
+# title: Additional disks partition and mount
+# description: Additional disks partition and mount, see full description
+# description-lines:
+# Additional disks partition and mount, must be a list of dicts with the following keys:
+#  - device: The device to partition and mount, e.g. /dev/sda or /dev/disk/by-path/xxxYYYYzzzz-www
+#  - number: The partition number to create, e.g. 1
+#  - fs_type: The filesystem type to use, e.g. ext4 (optional)
+#  - mount_point: The mount point to use, e.g. /mnt/data (optional)
+#  - mount: Whether to mount the partition or not, e.g. true (optional)
+#  - size: The size of the partition to create, e.g. 10% or 10G
+additional_disk: []
+
+# required: false
+# title: Set user password
+debian_common_tasks_set_password: true
+
+# required: false
+# title: Set user ssh key
+debian_common_tasks_set_ssh_key: true
+
+# required: false
+# title: Add ssh key to this users list
+debian_common_tasks_ssh_key_users:
+  - "{{ ansible_ssh_user }}"
+
+# required: false
+# title: Configure sudo
+debian_common_tasks_configure_sudo: true
+
+# required: false
+# title: Sudoers list
+debian_common_tasks_sudoers:
+  - "{{ ansible_ssh_user }}"
+
+# required: false
+# title: Sudoers commands
+debian_common_tasks_sudo_commands:
+  - ALL
+
+# required: false
+# title: Disable root login
+debian_common_tasks_disable_root_login: true
+
+# required: false
+# title: Users to remove
+debian_common_tasks_remove_users: []
+
+# required: false
+# title: Paths of users leftovers to remove
+debian_common_tasks_remove_users_paths: []
+
+# required: false
+# title: When create the filesystems on the additional disks, force the formatting
+debian_common_tasks_force_filesystem: false
+
+# required: false
+# title: After the filesystem creation, mount the partition to temporary mount for file sync
+debian_common_tasks_partition_temp_mount: /mnt
+
+# required: false
+# title: Enable usb_max_current_enable flag on Raspberry Pi
+debian_common_tasks_raspberry_usb_power: false
+
+# required: false
+# title: Disable armhf architecture on arm64
+debian_common_tasks_disable_armhf: true
+
+# required: false
+# title: Configure aptcacher
+debian_common_tasks_apt_cacher: false
+
+# required: false
+# title: Aptcacher config file path
+debian_common_tasks_apt_cacher_config: /etc/apt/apt.conf.d/00aptproxy
+
+# required: false
+# title: Aptcacher URL
+debian_common_tasks_apt_cacher_url: ""
+
+# required: false
+# title: GPG and various keyrings packages
+debian_common_tasks_gpg_keyrings:
+  - gpg
+  - debian-archive-keyring
+  - debian-keyring
+  - debian-ports-archive-keyring
+  - python3-debian
+
+# required: false
+# title: Add custom apt key by id from a keyserver, see full description
+# description-lines:
+# Add custom apt key by id from a keyserver
+# Must be a list of dicts with the following keys:
+#   - keyserver: The keyserver to use
+#   - id: The key id
+debian_common_tasks_custom_keys: []
+
+# required: false
+# title: Add custom CA certificate
+debian_common_tasks_custom_ca: false
+
+# required: false
+# title: Custom CA certificate content secret
+debian_common_tasks_ca_certificate_secret: ""
+
+# required: false
+# title: Custom apt deb repositories to add, see full description
+# description-lines:
+# Custom apt deb repositories to add
+# Must be a list of dicts with the following keys:
+#   - uris: The repository URL
+#   - suites: The repository suite
+#   - components: The repository components
+#   - signed_by: The keyring to use (optional)
+#   - architectures: The architectures to use (optional)
+debian_common_tasks_custom_repos: []
+
+# required: false
+# title: Enable apt upgrade
+debian_common_tasks_apt_upgrade: true
+
+# required: false
+# title: Apt upgrade type, see full description
+# description-lines:
+# Apt upgrade type
+#   - full: full upgrade
+#   - safe: safe upgrade
+#   - dist: dist upgrade
+#   - yes: normal upgrade
+debian_common_tasks_apt_upgrade_type: full
+
+# required: false
+# title: Apt packages to install
+debian_common_tasks_common_packages: []
+
+# required: false
+# title: Pipx packages to install
+debian_common_tasks_pipx_packages: []
+
+# required: false
+# title: Apt packages to remove
+debian_common_tasks_remove_packages: []
+
+# required: false
+# title: Custom CA certificate content secret
+
+# required: false
+# title: Create custom scripts directory
+debian_common_tasks_scripts_dir_create: true
+
+# required: false
+# title: Custom scripts directory
+debian_common_tasks_scripts_dir: /opt/scripts
+
+# required: false
+# title: Lines to add or modify in the systemd conf file, see full description
+# description-lines:
+# Lines to add or modify in the systemd conf file
+# Must be a list of dicts with the following keys:
+#   - regexp: The regex to match the line
+#   - line: The line to add or modify
+#   - state: The state of the line (present or absent) (default: present)
+debian_common_tasks_systemd_conf_lines: []
+
+# required: false
+# title: Enable hdmi output
+debian_common_tasks_systemd_hdmi_on: true
+
+# required: false
+# title: Locale to set
+debian_common_tasks_locale: en_GB.UTF-8
+
+# required: false
+# title: Timezone to set
+debian_common_tasks_timezone: Europe/Rome
+
+# required: false
+# title: Boot to CLI
+debian_common_tasks_boot_to_cli: true
+
+# required: false
+# title: Boot auto login
+debian_common_tasks_boot_login: false
+
+# required: false
+# title: Boot always to network install UI
+debian_common_tasks_boot_net_install_ui_always: false
+
+# required: false
+# title: New config.txt path
+debian_common_tasks_new_config_txt: /boot/firmware/config.txt
+
+# required: false
+# title: Old config.txt path
+debian_common_tasks_old_config_txt: /boot/config.txt
+
+# required: false
+# title: Config.txt path set by debian version
+debian_common_tasks_config_txt: "{{ debian_common_tasks_new_config_txt if ansible_distribution_major_version | int >= 12 else debian_common_tasks_old_config_txt }}"
+
+# required: false
+# title: Raspberry audio state on/off
+debian_common_tasks_audio_state: "off"
+
+# required: false
+# title: Raspberry camera state 0/1
+debian_common_tasks_camera_state: 0 # 0/1
+
+# required: false
+# title: Raspberry display state 0/1
+debian_common_tasks_display_state: 0 # 0/1
+
+# required: false
+# title: Raspberry poe fan state 0/1
+debian_common_tasks_poe_fan: 0 # 0/1
+
+# required: false
+# title: Raspberry i2c state on/off
+debian_common_tasks_i2c_state: "off" # on/off
+
+# required: false
+# title: Raspberry spi state on/off
+debian_common_tasks_spi_state: "off" # on/off
+
+# required: false
+# title: Raspberry otg mode state 0/1
+debian_common_tasks_otg_mode: 0 # 0/1
+
+# required: false
+# title: Raspberry composite state
+debian_common_tasks_enable_composite: false
+
+# required: false
+# title: Raspberry pciex gen3 state
+debian_common_tasks_enable_pciex_gen3: false
+
+# required: false
+# title: Raspberry sdtv mode, see full description
+# description-lines:
+# Raspberry sdtv mode, must be one of:
+#   - 'ntsc' Normal NTSC
+#   - 'japan_ntsc' Japanese version of NTSC – no pedestal
+#   - 'pal' Normal PAL
+#   - 'braz_pal' Brazilian version of PAL – 525/60 rather than 625/50, different subcarrier
+debian_common_tasks_sdtv_mode: pal
+
+# required: false
+# title: Raspberry gpu mem, see full description
+# description-lines:
+# Raspberry gpu mem, default config is 1/4 of total memory
+# if camera is enabled or 16mb if camera is disabled
+debian_common_tasks_gpu_mem: "{{ (ansible_memtotal_mb / 4 | int) if (debian_common_tasks_camera_state == 1 or not debian_common_tasks_boot_to_cli | bool) else 16 }}"
+
+# required: false
+# title: Raspberry config.txt lines to add or modify, see full description
+# description-lines:
+# Raspberry config.txt lines to add or modify, must be a list of dicts with the following keys:
+#   - regexp: The regex to match the line
+#   - line: The line to add or modify
+#   - state: The state of the line (present or absent) (default: present)
+debian_common_tasks_config_txt_lines: # https://www.raspberrypi.com/documentation/computers/config_txt.html
+  - { regexp: "disable_splash=", line: "disable_splash=1" }
+  - {
+      regexp: "dtparam=audio=",
+      line: "dtparam=audio={{ debian_common_tasks_audio_state }}",
+    }
+  - {
+      regexp: "camera_auto_detect=",
+      line: "camera_auto_detect={{ debian_common_tasks_camera_state }}",
+    }
+  - {
+      regexp: "display_auto_detect=",
+      line: "display_auto_detect={{ debian_common_tasks_display_state }}",
+    }
+  - { regexp: "gpu_mem=", line: "gpu_mem={{ debian_common_tasks_gpu_mem }}" }
+  - {
+      regexp: "disable_poe_fan=",
+      line: "disable_poe_fan={{ debian_common_tasks_poe_fan }}",
+    }
+  - {
+      regexp: "dtparam=i2c_arm=",
+      line: "dtparam=i2c_arm={{ debian_common_tasks_i2c_state }}",
+    }
+  - {
+      regexp: "dtparam=spi=",
+      line: "dtparam=spi={{ debian_common_tasks_spi_state }}",
+    }
+  - { regexp: "otg_mode=", line: "otg_mode={{ debian_common_tasks_otg_mode }}" }
+  - {
+      regexp: "#?dtparam=pciex1_gen=3",
+      line: '{{ "" if debian_common_tasks_enable_pciex_gen3 else "#" }}dtparam=pciex1_gen=3',
+    }
+
+# required: false
+# title: Enable cgroups on Raspberry Pi
+debian_common_tasks_cgroups_enable: true
+
+# required: false
+# title: Cgroups cmdlines
+debian_common_tasks_cgroups_cmdlines:
+  - cgroup_enable=cpuset
+  - cgroup_memory=1
+  - cgroup_enable=memory
+
+# required: false
+# title: Rpiconnect service install and enable
+debian_common_tasks_rpiconnect_enable: false
+
+# required: false
+# title: Rpiconnect user lingering
+debian_common_tasks_rpiconnect_lingering: false
